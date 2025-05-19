@@ -297,7 +297,7 @@ function pathauto_nodeapi(&$node, $op, $teaser = NULL, $page = NULL) {
         if ($alias = pathauto_create_alias('node', $op, $placeholders, $src, $node->nid, $node->type, $node->language)) {
           $node->path = $alias;
         }
-             // --- Optional: Custom alias generation logic-----------all nnode type ---
+             // --- Optional: Custom alias generation logic------all nnode type ---
       if ($op == 'insert') {
         // Sanitize title to create alias
         $title = strtolower(trim($node->title));
