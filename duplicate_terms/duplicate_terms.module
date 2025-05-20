@@ -1,0 +1,247 @@
+<?php
+
+/**
+ * Implementation of hook_menu().
+ */
+function duplicate_terms_menu() {
+  $items = array();
+
+  $items['admin/content/duplicate-terms'] = array(
+    'title' => 'Duplicate Taxonomy Terms',
+    'description' => 'List duplicate taxonomy terms by name and vocabulary.',
+    'page callback' => 'duplicate_terms_page',
+    'access arguments' => array('administer taxonomy'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  $items['admin/duplicate-websites'] = array(
+    'title' => 'Duplicate Websites',
+    'page callback' => 'duplicate_terms_websites',
+    'access arguments' => array('administer users'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  $items['admin/duplicate-websites/csv'] = array(
+    'title' => 'Download Duplicate Website Domains CSV',
+    'page callback' => 'duplicate_terms_websites_csv',
+    'access arguments' => array('administer nodes'),
+    'type' => MENU_CALLBACK,
+  );
+
+
+  return $items;
+}
+
+/**
+ * Page callback: Displays duplicate taxonomy terms with pagination.
+ */
+function duplicate_terms_page() {
+    $header = array('Term Name', 'Vocabulary', 'Term ID');
+  
+    // Number of items per page
+    $limit = 50;
+  
+    // Use pager_query() for pagination, set offset for pages
+    $query = "
+      SELECT td.tid, td.name, v.name AS vocab_name
+      FROM term_data td
+      INNER JOIN (
+        SELECT name, vid
+        FROM term_data
+        GROUP BY name, vid
+        HAVING COUNT(*) > 1
+      ) dup ON td.name = dup.name AND td.vid = dup.vid
+      INNER JOIN vocabulary v ON td.vid = v.vid
+      ORDER BY td.name, td.vid
+    ";
+  
+    // Fetch the results with pagination (limit and offset)
+    $result = pager_query($query, $limit, 0);
+   
+    // Create the table rows
+    $rows = array();
+    while ($row = db_fetch_object($result)) {
+      $rows[] = array(
+        check_plain($row->name),
+        check_plain($row->vocab_name),
+        l($row->tid, 'admin/content/taxonomy/edit/term/' . $row->tid),
+      );
+    }
+  
+    // Check if any rows were returned
+    if (empty($rows)) {
+      return t('No duplicate taxonomy terms found.');
+    }
+  
+    // Display the results in a table
+    $output = theme('table', $header, $rows);
+  
+    // Add the pager output to navigate between pages
+    $output .= theme('pager');
+  
+    return $output;
+  }
+  
+
+
+
+
+
+/**
+ * Page callback to show duplicate website domains in decreasing order.
+ * Shows node edit links for each duplicate domain.
+ */
+
+
+function duplicate_terms_websites() {
+    $output = '';
+  
+    // Query all non-empty website URLs with their associated node IDs
+    $result = db_query("
+      SELECT nid, field_website_url
+      FROM {content_field_website}
+      WHERE field_website_url IS NOT NULL AND field_website_url != ''
+    ");
+  
+    $domain_counts = array();
+    $domain_nids = array(); // To track unique node IDs per domain
+  
+    while ($row = db_fetch_object($result)) {
+      $url = trim($row->field_website_url);
+      $nid = $row->nid;
+      $parts = @parse_url($url); // Suppress warnings for malformed URLs
+  
+      if (!empty($parts['host'])) {
+        $host = strtolower($parts['host']);
+        if (strpos($host, 'www.') === 0) {
+          $host = substr($host, 4);
+        }
+  
+        if (!isset($domain_counts[$host])) {
+          $domain_counts[$host] = 0;
+          $domain_nids[$host] = array();
+        }
+  
+        // Only add nid if it's not already stored for this domain
+        if (!in_array($nid, $domain_nids[$host])) {
+          $domain_counts[$host]++;
+          $domain_nids[$host][] = $nid;
+        }
+      }
+    }
+  
+    // Filter only duplicates (count > 1)
+    $duplicates = array_filter($domain_counts, function($count) {
+      return $count > 1;
+    });
+  
+    if (empty($duplicates)) {
+      return t('No duplicate website domains found.');
+    }
+  
+    // Sort duplicates in descending order
+    arsort($duplicates);
+  
+    $max_count = max($duplicates);
+  
+    // Output HTML table
+    $output .= '<table class="web-duplicate-table" border="1" cellspacing="0" cellpadding="4">';
+    $output .= '<thead><tr><th>' . t('Domain') . '</th><th>' . t('Count') . '</th><th>' . t('Node Edit Links') . '</th></tr></thead><tbody>';
+  
+    foreach ($duplicates as $domain => $count) {
+      $highlight = ($count == $max_count) ? ' style="background-color: white;"' : '';
+  
+      // Create links like /node/[nid]/edit
+      $nid_links = array();
+      foreach ($domain_nids[$domain] as $nid) {
+        $nid_links[] = '<a href="/node/' . intval($nid) . '/edit">node/' . intval($nid) . '</a>';
+      }
+  
+      $nid_links_output = implode(', ', $nid_links);
+  
+      $output .= '<tr' . $highlight . '><td>' . check_plain($domain) . '</td><td>' . intval($count) . '</td><td>' . $nid_links_output . '</td></tr>';
+    }
+  
+    $output .= '</tbody></table>';
+  
+    return $output;
+  }
+  
+
+
+  
+  
+
+//   /**
+//  * Callback to generate and output CSV of duplicate domains and node IDs.
+//  */
+
+function duplicate_terms_websites_csv() {
+    // Header to force file download
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="duplicate_domains.csv"');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+  
+    // Open output stream
+    $output = fopen('php://output', 'w');
+  
+    // Output column headers
+    fputcsv($output, array('Domain', 'Count', 'Node Links'));
+  
+    // Query all URLs with node IDs
+    $result = db_query("
+      SELECT n.nid, cf.field_website_url
+      FROM {node} n
+      INNER JOIN {content_field_website} cf ON n.nid = cf.nid
+      WHERE cf.field_website_url IS NOT NULL AND cf.field_website_url != ''
+    ");
+  
+    $domain_counts = array();
+    $domain_nodes = array(); // Track unique node IDs per domain
+  
+    while ($row = db_fetch_object($result)) {
+      $url = trim($row->field_website_url);
+      $nid = $row->nid;
+      $parts = @parse_url($url);
+  
+      if (!empty($parts['host'])) {
+        $host = strtolower($parts['host']);
+        if (strpos($host, 'www.') === 0) {
+          $host = substr($host, 4);
+        }
+  
+        if (!isset($domain_nodes[$host])) {
+          $domain_nodes[$host] = array(); // unique NIDs
+        }
+  
+        // Add only if not already added
+        if (!in_array($nid, $domain_nodes[$host])) {
+          $domain_nodes[$host][] = $nid;
+        }
+      }
+    }
+  
+    // Filter domains with more than one unique node
+    foreach ($domain_nodes as $domain => $nids) {
+      if (count($nids) > 1) {
+        $domain_counts[$domain] = count($nids);
+      }
+    }
+  
+    // Sort by count descending
+    arsort($domain_counts);
+  
+    // Output CSV rows
+    foreach ($domain_counts as $domain => $count) {
+      $links = array_map(function($nid) {
+        return "/node/$nid";
+      }, $domain_nodes[$domain]);
+  
+      $link_list = implode(' | ', $links);
+      fputcsv($output, array($domain, $count, $link_list));
+    }
+  
+    fclose($output);
+  }
+  
