@@ -118,44 +118,7 @@ function duplicate_terms_menu() {
 
 
 
-
-
 function duplicate_terms_websites() {
-
-
-// // Array to count website URLs.
-// $url_counts = array();
-
-// // Query only the first 100 node IDs.
-// $result = db_query_range("SELECT nid FROM {node}",1000, 2000);
-
-// while ($obj = db_fetch_object($result)) {
-//   // Load full node.
-//   $node = node_load($obj->nid);
-
-//   // Check if the field exists and has a URL.
-//   if (!empty($node->field_website[0]['url'])) {
-//     $url = $node->field_website[0]['url'];
-
-//     // Count each URL.
-//     if (!isset($url_counts[$url])) {
-//       $url_counts[$url] = 1;
-//     } else {
-//       $url_counts[$url]++;
-//     }
-//   }
-// }
-
-// // Print duplicate URLs.
-// print "Duplicate URLs (within first 100 nodes):\n\n";
-// foreach ($url_counts as $url => $count) {
-//   if ($count > 1) {
-//     print "$url (used $count times)\n";
-//   }
-// }
-
-//   -----------------------------------
-
     $output = '';
   
     // Query all non-empty website URLs with their associated node IDs
