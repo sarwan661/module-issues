@@ -1,0 +1,5 @@
+name = Duplicate Terms
+description = Finds duplicate taxonomy terms by name and vocabulary.
+core = 6.x
+package = custom
+version = "6.x-1.0"
