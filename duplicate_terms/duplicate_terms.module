@@ -118,6 +118,7 @@ function duplicate_terms_menu() {
 
 
 
+
 function duplicate_terms_websites() {
     $output = '';
   
@@ -189,84 +190,6 @@ function duplicate_terms_websites() {
     return $output;
   }
   
-  
-  
-
-
-  /**
- * Callback to generate and output CSV of duplicate domains and node IDs.
- */
-
-// function duplicate_terms_websites_csv() {
-//     // Header to force file download
-//     header('Content-Type: text/csv');
-//     header('Content-Disposition: attachment; filename="duplicate_domains.csv"');
-//     header('Pragma: no-cache');
-//     header('Expires: 0');
-  
-//     // Open output stream
-//     $output = fopen('php://output', 'w');
-  
-//     // Output column headers
-//     fputcsv($output, array('Domain', 'Count', 'Node Links'));
-  
-//     // Query all URLs with node IDs
-//     $result = db_query("
-//       SELECT n.nid, cf.field_website_url
-//       FROM {node} n
-//       INNER JOIN {content_field_website} cf ON n.nid = cf.nid
-//       WHERE cf.field_website_url IS NOT NULL AND cf.field_website_url != ''
-//     ");
-  
-//     $domain_counts = array();
-//     $domain_nodes = array(); // Track unique node IDs per domain
-  
-//     while ($row = db_fetch_object($result)) {
-//       $url = trim($row->field_website_url);
-//       $nid = $row->nid;
-//       $parts = @parse_url($url);
-  
-//       if (!empty($parts['host'])) {
-//         $host = strtolower($parts['host']);
-//         if (strpos($host, 'www.') === 0) {
-//           $host = substr($host, 4);
-//         }
-  
-//         if (!isset($domain_nodes[$host])) {
-//           $domain_nodes[$host] = array(); // unique NIDs
-//         }
-  
-//         // Add only if not already added
-//         if (!in_array($nid, $domain_nodes[$host])) {
-//           $domain_nodes[$host][] = $nid;
-//         }
-//       }
-//     }
-  
-//     // Filter domains with more than one unique node
-//     foreach ($domain_nodes as $domain => $nids) {
-//       if (count($nids) > 1) {
-//         $domain_counts[$domain] = count($nids);
-//       }
-//     }
-  
-//     // Sort by count descending
-//     arsort($domain_counts);
-  
-//     // Output CSV rows
-//     foreach ($domain_counts as $domain => $count) {
-//       $links = array_map(function($nid) {
-//         return "/node/$nid";
-//       }, $domain_nodes[$domain]);
-  
-//       $link_list = implode(' | ', $links);
-//       fputcsv($output, array($domain, $count, $link_list));
-//     }
-  
-//     fclose($output);
-//   }
-//   --------
-
 function duplicate_terms_websites_csv() {
     // Header to force file download
     header('Content-Type: text/csv');
@@ -340,8 +263,7 @@ function duplicate_terms_websites_csv() {
 
 
 
-
-  function duplicate_terms_website_domains_report() {
+function duplicate_terms_website_domains_report() {
     $output = '';
   
     // Optional: restrict access
@@ -351,6 +273,7 @@ function duplicate_terms_websites_csv() {
     }
   
     $csv_mode = isset($_GET['csv']) && $_GET['csv'] == 1;
+    $base_url = 'https://www.indiacustomercare.com';
   
     // Query all non-empty website URLs with their associated node IDs
     $result = db_query("
@@ -396,48 +319,56 @@ function duplicate_terms_websites_csv() {
     arsort($duplicates);
     $max_count = max($duplicates);
   
-    // CSV Export Mode
-    if ($csv_mode) {
-      header('Content-Type: text/csv');
-      header('Content-Disposition: attachment; filename="duplicate_domains.csv"');
-      header('Pragma: no-cache');
-      header('Expires: 0');
+// CSV Export Mode
+if ($csv_mode) {
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="duplicate_domains_list.csv"');
+    header('Pragma: no-cache');
+    header('Expires: 0');
   
-      $output_stream = fopen('php://output', 'w');
-      fputcsv($output_stream, array('Domain', 'Count', 'Node IDs'));
+    $output_stream = fopen('php://output', 'w');
+    fputcsv($output_stream, array('Domain', 'Count', 'Node Links'));
   
-      foreach ($duplicates as $domain => $count) {
-        $node_ids = implode('| ', $domain_nids[$domain]);
-        fputcsv($output_stream, array($domain, $count, $node_ids));
-      }
+    foreach ($duplicates as $domain => $count) {
+      $node_links = array_map(function($nid) use ($base_url) {
+        return $base_url . '/node/' . intval($nid); // Raw clickable URL
+      }, $domain_nids[$domain]);
   
-      fclose($output_stream);
-      exit;
+      // Output as a comma-separated string of URLs
+    //   fputcsv($output_stream, array($domain, $count, implode(', ', $node_links)));
+    fputcsv($output_stream, array_merge(
+        [$domain, $count], // First two columns
+        $node_links        // Each URL in its own column
+      ));
     }
+  
+    fclose($output_stream);
+    exit;
+  }
   
     // HTML Table Output Mode
     $output .= '<table class="web-duplicate-table" border="1" cellspacing="0" cellpadding="4">';
-    $output .= '<thead><tr><th>' . t('Domain') . '</th><th>' . t('Count') . '</th><th>' . t('Node Edit Links') . '</th></tr></thead><tbody>';
+    $output .= '<thead><tr><th>' . t('Domain') . '</th><th>' . t('Count') . '</th><th>' . t('Node  Links') . '</th></tr></thead><tbody>';
   
     foreach ($duplicates as $domain => $count) {
       $highlight = ($count == $max_count) ? ' style="background-color: white;"' : '';
       $nid_links = array();
   
       foreach ($domain_nids[$domain] as $nid) {
-        $nid_links[] = '<a href="/node/' . intval($nid) . '/edit">node/' . intval($nid) . '</a>';
+        $nid_links[] = '<a href="' . $base_url . '/node/' . intval($nid) . '">' . $base_url . '/node/' . intval($nid) . '</a>';
       }
   
       $output .= '<tr' . $highlight . '>';
       $output .= '<td>' . check_plain($domain) . '</td>';
       $output .= '<td>' . intval($count) . '</td>';
-      $output .= '<td>' . implode(', ', $nid_links) . '</td>';
+      $output .= '<td>' . implode(' , ', $nid_links) . '</td>';
       $output .= '</tr>';
     }
   
     $output .= '</tbody></table>';
   
     // Add CSV download button (form)
-    $form_action = check_url(request_uri()); 
+    $form_action = check_url(request_uri());
     $output .= '
       <form method="get" action="' . $form_action . '">
         <input type="hidden" name="csv" value="1" />
