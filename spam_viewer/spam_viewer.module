@@ -1,0 +1,425 @@
+<?php
+/**
+ * Implementation of hook_menu().
+ */
+function spam_viewer_menu() {
+  $items = array();
+
+  $items['admin/content/spam-comments'] = array(
+    'title' => 'Spam Comments',
+    'description' => 'View Published (spam) comments',
+    'page callback' => 'spam_viewer_page',
+    'access arguments' => array('administer comments'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+
+   $items['admin/content/spam-comments-list'] = array(
+    'title' => 'Spam Comments',
+    'description' => 'View ALL Published (spam) comments',
+    'page callback' => 'spam_viewer_list_page',
+    'access arguments' => array('administer comments'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+    $items['admin/spam-comments/csv'] = array(
+    'title' => 'Download Spam Comments CSV',
+    'page callback' => 'spam_viewer_list_csv',
+    'access arguments' => array('administer comments'),
+    'type' => MENU_CALLBACK,
+  );
+
+
+  return $items;
+}
+
+/**
+ * Page callback: Display published comments (potential spam).
+ */
+function spam_viewer_list_page() {
+  $output = '<h2>Spam / Published Comments </h2>';
+
+  // Start the table.
+  $output .= '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse; width:100%;">';
+  $output .= '<thead><tr>';
+  $output .= '<th>Node ID</th>';
+  $output .= '<th>Subject</th>';
+  $output .= '<th>Date</th>';
+  $output .= '<th>Comment</th>';
+  $output .= '</tr></thead><tbody>';
+
+  // Limit to 1000 most recent published comments
+  $result = db_query("SELECT cid, nid, subject, timestamp, comment FROM {comments} WHERE status = 0 ORDER BY timestamp ASC limit 100 ");
+
+  while ($comment = db_fetch_object($result)) {
+    $output .= '<tr>';
+     $output .= '<td>' . check_plain($comment->nid) . '</td>';
+    $output .= '<td>' . check_plain($comment->subject) . '</td>';
+    $output .= '<td>' . format_date($comment->timestamp, 'custom', 'Y-m-d H:i:s') . '</td>';
+    $output .= '<td>' . check_markup($comment->comment) . '</td>';
+    $output .= '</tr>';
+  }
+
+  $output .= '</tbody></table>';
+
+  return $output;
+}
+
+function spam_viewer_list_csv() {
+  header('Content-Type: text/csv');
+  header('Content-Disposition: attachment; filename="spam_comments.csv"');
+  header('Pragma: no-cache');
+  header('Expires: 0');
+
+  $output = fopen('php://output', 'w');
+  fputcsv($output, array('Node ID', 'Subject', 'Date', 'Comment'));
+
+  $result = db_query("SELECT nid, subject, timestamp, comment FROM {comments} WHERE status = 0 ORDER BY timestamp ASC ");
+
+  while ($comment = db_fetch_object($result)) {
+    fputcsv($output, array(
+      $comment->nid,
+      $comment->subject,
+      format_date($comment->timestamp, 'custom', 'Y-m-d H:i:s'),
+      strip_tags(check_markup($comment->comment))
+    ));
+  }
+
+  fclose($output);
+  exit;
+}
+
+
+// function spam_viewer_page() {
+//   $output = '<h2>Published Comments</h2>';
+
+//   $output .= '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; width: 100%;">';
+//   $output .= '<thead><tr>';
+//   $output .= '<th>NID</th>';
+//   $output .= '<th>Subject</th>';
+//   $output .= '<th>Email</th>';
+//   $output .= '<th>Date</th>';
+//   $output .= '<th>Comment</th>';
+//   $output .= '</tr></thead>';
+//   $output .= '<tbody>';
+
+//   $result = db_query("SELECT nid, subject, mail, timestamp, comment, format FROM {comments} WHERE status = 0 ORDER BY nid ASC");
+
+//   // Allowed Unicode script ranges (English + Indic)
+//   $allowed_unicode_ranges =
+//     '\x{0000}-\x{007F}' .    // English
+//     '\x{0900}-\x{097F}' .    // Devanagari (Hindi, Marathi)
+//     '\x{0980}-\x{09FF}' .    // Bengali
+//     '\x{0A00}-\x{0A7F}' .    // Gurmukhi (Punjabi)
+//     '\x{0A80}-\x{0AFF}' .    // Gujarati
+//     '\x{0B00}-\x{0B7F}' .    // Odia
+//     '\x{0B80}-\x{0BFF}' .    // Tamil
+//     '\x{0C00}-\x{0C7F}' .    // Telugu
+//     '\x{0C80}-\x{0CFF}' .    // Kannada
+//     '\x{0600}-\x{06FF}' .    // Arabic (Urdu)
+//     '\x{0D00}-\x{0D7F}';     // Malayalam
+
+//   // Match any character NOT in allowed Unicode ranges
+//   $foreign_pattern = '/[^' . $allowed_unicode_ranges . ']/u';
+
+//   $found = false;
+
+//   while ($comment = db_fetch_object($result)) {
+//     $subject = trim($comment->subject);
+//     $comment_text = trim($comment->comment);
+
+//     // Skip if both subject and comment are empty
+//     if (empty($subject) && empty($comment_text)) {
+//       continue;
+//     }
+
+//     // Check if subject or comment has foreign characters
+//     if (preg_match($foreign_pattern, $subject) || preg_match($foreign_pattern, $comment_text)) {
+//       $found = true;
+//       $output .= '<tr>';
+//       $output .= '<td>' . intval($comment->nid) . '</td>';
+//       $output .= '<td>' . check_plain($subject) . '</td>';
+//       $output .= '<td>' . check_plain($comment->mail) . '</td>';
+//       $output .= '<td>' . format_date($comment->timestamp, 'short') . '</td>';
+//       $output .= '<td>' . check_markup($comment_text, $comment->format, FALSE) . '</td>';
+//       $output .= '</tr>';
+//     }
+//   }
+
+//   if (!$found) {
+//     $output .= '<tr><td colspan="5"><em>No comments with foreign characters found.</em></td></tr>';
+//   }
+
+//   $output .= '</tbody></table>';
+
+//   return $output;
+// }
+
+
+
+
+
+function spam_viewer_page() {
+   
+  $output = '<h2>Published Comments</h2>';
+
+  $output .= '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; width: 100%;">';
+  $output .= '<thead><tr>';
+  $output .= '<th>NID</th>';
+  $output .= '<th>Subject</th>';
+  $output .= '<th>Date</th>';
+  $output .= '<th>Comment</th>';
+  $output .= '</tr></thead><tbody>';
+
+  // Fetch all Published comments (status = 0)
+  $result = db_query("SELECT nid, subject, mail, timestamp, comment, format FROM {comments} WHERE status = 0 ORDER BY nid ASC");
+
+  // Unicode ranges allowed 
+ $allowed_unicode_ranges = implode('', [
+  // '\x{0000}-\x{007F}', // English
+ '\x{0000}-\x{00FF}\x{2000}-\x{206F}\x{20A0}-\x{20CF}\x{2190}-\x{21FF}\x{2200}-\x{22FF}\x{2300}-\x{23FF}\x{2500}-\x{257F}',
+ '\x{1F600}-\x{1F64F}\x{1F300}-\x{1F5FF}\x{1F680}-\x{1F6FF}\x{2600}-\x{26FF}\x{2700}-\x{27BF}\x{FE00}-\x{FE0F}\x{1F900}-\x{1F9FF}\x{1FA70}-\x{1FAFF}\x{1F1E6}-\x{1F1FF}',
+
+  '\x{0900}-\x{097F}', //Devanagari (Hindi, Marathi)
+  '\x{0980}-\x{09FF}', // Bengali
+  '\x{0A00}-\x{0A7F}', // Gurmukhi (Punjabi)
+  '\x{0A80}-\x{0AFF}', // Gujarati
+  '\x{0B00}-\x{0B7F}', // Odia
+  '\x{0B80}-\x{0BFF}', // Tamil
+  '\x{0C00}-\x{0C7F}', // Telugu
+  '\x{0C80}-\x{0CFF}', // Kannada
+  '\x{0D00}-\x{0D7F}'  // Malayalam
+]);
+  // Pattern to detect any character outside allowed ranges
+  $foreign_pattern = '/[^' . $allowed_unicode_ranges . ']/u';
+  $found = false;
+
+  while ($comment = db_fetch_object($result)) {
+    $subject = trim($comment->subject);
+    $comment_text = trim($comment->comment);
+
+    if (empty($subject) && empty($comment_text)) {
+      continue; // Skip empty comments
+    }
+
+    // If subject or comment contains foreign characters
+    if (preg_match($foreign_pattern, $subject) || preg_match($foreign_pattern, $comment_text)) {
+      $found = true;
+
+      $output .= '<tr>';
+      $output .= '<td>' . intval($comment->nid) . '</td>';
+      $output .= '<td>' . check_plain($subject) . '</td>';
+      $output .= '<td>' . format_date($comment->timestamp, 'short') . '</td>';
+      $output .= '<td>' . check_markup($comment_text, $comment->format, FALSE) . '</td>';
+      $output .= '</tr>';
+    }
+  }
+
+  if (!$found) {
+    $output .= '<tr><td colspan="5"><em>No comments with foreign characters found.</em></td></tr>';
+  }
+
+  $output .= '</tbody></table>';
+  return $output;
+}
+
+
+
+
+
+
+
+
+
+// function spam_viewer_page() {
+//   $output = '<h2>Published Spam Comments</h2>';
+
+//   // Start the table
+//   $output .= '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; width: 100%;">';
+//   $output .= '<thead>';
+//   $output .= '<tr>';
+//   $output .= '<th>NID</th>';
+//   $output .= '<th>Subject</th>';
+//   $output .= '<th>Email</th>';
+//   $output .= '<th>Date</th>';
+//   $output .= '<th>Comment</th>';
+//   $output .= '</tr>';
+//   $output .= '</thead>';
+//   $output .= '<tbody>';
+
+//   // Get unpublished comments
+//   $result = db_query("SELECT cid, nid, subject, mail, timestamp, comment, format FROM {comments} WHERE status = 0 ORDER BY timestamp ASC");
+
+//   while ($comment = db_fetch_object($result)) {
+//     $subject = $comment->subject;
+//     $comment_text = $comment->comment;
+// $is_spam = (
+//   // // Cyrillic
+//   preg_match('/\b[А-Яа-яЁё]{2,}\b/u', $subject) ||
+//   preg_match('/\b[А-Яа-яЁё]{2,}\b/u', $comment_text) ||
+//   // preg_match('/\b[А-Яа-яЁё]{2,}\b/u', $subject . ' ' . $comment_text) ||
+
+//   // Arabic
+//   preg_match('/[\x{0600}-\x{06FF}]+/u', $subject) ||
+//   preg_match('/[\x{0600}-\x{06FF}]+/u', $comment_text) ||
+
+//   // Chinese
+//   preg_match('/[\x{4E00}-\x{9FFF}]+/u', $subject) ||
+//   preg_match('/[\x{4E00}-\x{9FFF}]+/u', $comment_text) ||
+
+//   // Japanese
+//   preg_match('/[\x{3040}-\x{30FF}\x{31F0}-\x{31FF}]+/u', $subject) ||
+//   preg_match('/[\x{3040}-\x{30FF}\x{31F0}-\x{31FF}]+/u', $comment_text) ||
+
+//   // Korean
+//   preg_match('/[\x{AC00}-\x{D7AF}]+/u', $subject) ||
+//   preg_match('/[\x{AC00}-\x{D7AF}]+/u', $comment_text) ||
+
+//   // Thai
+//   preg_match('/[\x{0E00}-\x{0E7F}]+/u', $subject) ||
+//   preg_match('/[\x{0E00}-\x{0E7F}]+/u', $comment_text) ||
+
+//   // Hebrew
+//   preg_match('/[\x{0590}-\x{05FF}]+/u', $subject) ||
+//   preg_match('/[\x{0590}-\x{05FF}]+/u', $comment_text)  
+
+//   // Spam links
+// //   preg_match('/https?:\/\/[^\s]+/i', $subject) ||
+// //   preg_match('/https?:\/\/[^\s]+/i', $comment_text) 
+
+// //   // Common spam words
+// //   preg_match('/\b(free|viagra|casino|loan|bonus|btc|crypto)\b/i', $subject) ||
+// //   preg_match('/\b(free|viagra|casino|loan|bonus|btc|crypto)\b/i', $comment_text)
+// );
+
+
+//     if (!$is_spam) {
+//       continue;
+//     }
+
+//     $output .= '<tr>';
+//     $output .= '<td>' . intval($comment->nid) . '</td>';
+//     $output .= '<td>' . check_plain($subject) . '</td>';
+//     $output .= '<td>' . check_plain($comment->mail) . '</td>';
+//     $output .= '<td>' . format_date($comment->timestamp, 'short') . '</td>';
+//     $output .= '<td>' . check_markup($comment_text, $comment->format, FALSE) . '</td>';
+//     $output .= '</tr>';
+//   }
+
+//   $output .= '</tbody>';
+//   $output .= '</table>';
+
+//   return $output;
+// }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// function spam_viewer_page() {
+//   $output = '<h2>Unpublished Comments in Foreign (Non-Indian) Languages</h2>';
+
+//   $output .= '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; width: 100%;">';
+//   $output .= '<thead><tr>';
+//   $output .= '<th>NID</th>';
+//   $output .= '<th>Subject</th>';
+//   $output .= '<th>Email</th>';
+//   $output .= '<th>Date</th>';
+//   $output .= '<th>Comment</th>';
+//   $output .= '</tr></thead><tbody>';
+
+//   // Query unpublished comments
+//   $result = db_query("SELECT nid, subject, mail, timestamp, comment, format FROM {comments} WHERE status = 0 ORDER BY timestamp DESC");
+
+//   // Foreign language Unicode blocks (non-Indian scripts)
+//   $foreign_language_patterns = [
+//     'Chinese'    => '/[\x{4E00}-\x{9FFF}]/u',
+//     'Japanese'   => '/[\x{3040}-\x{30FF}\x{31F0}-\x{31FF}]/u',
+//     'Korean'     => '/[\x{AC00}-\x{D7AF}]/u',
+//     'Russian'    => '/[\x{0400}-\x{04FF}]/u',
+//     'Arabic'     => '/[\x{0600}-\x{06FF}]/u',
+//     'Thai'       => '/[\x{0E00}-\x{0E7F}]/u',
+//     'Hebrew'     => '/[\x{0590}-\x{05FF}]/u',
+//     'Greek'      => '/[\x{0370}-\x{03FF}]/u',
+//     // Add more as needed
+//   ];
+
+//   $found = false;
+
+//   while ($comment = db_fetch_object($result)) {
+//     $subject = $comment->subject;
+//     $comment_text = $comment->comment;
+
+//     // Skip if subject or comment is empty
+//     // if (empty($subject) || empty($comment_text)) {
+//     //   continue;
+//     // }
+
+//     $is_foreign = false;
+
+//     // Check for presence of foreign language characters
+//     foreach ($foreign_language_patterns as $pattern) {
+//       if (preg_match($pattern, $subject) || preg_match($pattern, $comment_text)) {
+//         $is_foreign = true;
+//         break;
+//       }
+//     }
+
+//     // Show only if foreign language found
+//     if ($is_foreign) {
+//       $found = true;
+//       $output .= '<tr>';
+//       $output .= '<td>' . intval($comment->nid) . '</td>';
+//       $output .= '<td>' . check_plain($subject) . '</td>';
+//       $output .= '<td>' . check_plain($comment->mail) . '</td>';
+//       $output .= '<td>' . format_date($comment->timestamp, 'short') . '</td>';
+//       $output .= '<td>' . check_markup($comment_text, $comment->format, FALSE) . '</td>';
+//       $output .= '</tr>';
+//     }
+//   }
+
+//   if (!$found) {
+//     $output .= '<tr><td colspan="5"><em>No comments found in foreign languages.</em></td></tr>';
+//   }
+
+//   $output .= '</tbody></table>';
+
+//   return $output;
+// }

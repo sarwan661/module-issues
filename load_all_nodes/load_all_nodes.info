@@ -1,0 +1,5 @@
+name = Load All Nodes
+description = A simple module to load all nodes and log their titles.
+core = 6.x
+package = custom
+version = "6.x-1.0"

@@ -1,0 +1,536 @@
+<?php
+
+/**
+ * Implementation of hook_menu().
+ */
+function load_all_nodes_menu() {
+  $items = array();
+
+  $items['admin/content/load-all-nodes'] = array(
+    'title' => 'Load All Nodes',
+    'description' => 'Load and display all node titles.',
+    'page callback' => 'load_all_nodes_page',
+    'access arguments' => array('administer nodes'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+
+  $items['admin/content/load-all-nodes-website'] = array(
+    'title' => 'Website All Nodes',
+    'description' => 'Load and display all page-type nodes with unmatched social links.',
+    'page callback' => 'load_all_website_page',
+    'access arguments' => array('administer nodes'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  return $items;
+}
+
+function load_all_website_page() {
+  // Fetch all node IDs (remove type filter)
+  $result = db_query("SELECT nid FROM {node} ORDER BY nid ASC");
+
+  // Set the target website to match
+  // $website = "https://esamadhan.nic.in";
+
+   $website = "/node/14510";
+
+  // Counter to track matches
+  $match_count = 0;
+
+  while ($row = db_fetch_object($result)) {
+    $node = node_load($row->nid);
+
+    // Combine all body fields (including multilingual or field_body if present)
+    $body_html = '';
+
+    // Drupal 6 default body field
+    if (isset($node->body)) {
+      $body_html .= check_markup($node->body, $node->format, FALSE);
+    }
+
+    // Additional fields (e.g., CCK) — optional check
+    if (isset($node->field_body) && is_array($node->field_body)) {
+      foreach ($node->field_body as $lang => $items) {
+        foreach ($items as $item) {
+          $body_html .= check_markup($item['value'], $item['format'], FALSE);
+        }
+      }
+    }
+
+    // Extract all <a href=""> links
+    preg_match_all('/<a[^>]+href=["\']?([^"\'>\s]+)["\']?[^>]*>/i', $body_html, $matches);
+
+    // Print only matching links
+    if (!empty($matches[1])) {
+      foreach ($matches[1] as $link) {
+        if (strpos($link, $website) === 0) {
+          print "Node ID: " . $node->nid . " (" . $node->type . ")\n";
+          print " - " . $link . "\n\n";
+          $match_count++;
+        }
+      }
+    }
+  }
+
+  // Message if no matching links were found
+  if ($match_count === 0) {
+    print "No matching links found for: $website\n";
+  } else {
+    print "Total matching links found: $match_count\n";
+  }
+}
+
+
+
+
+// function load_all_nodes_page() {
+
+//   $header = array('Node ID', 'Title', 'Organization Name', 'Social Links');
+//   $rows = array();
+
+//   $limit = 50;
+
+//   // Use pager_query instead of db_query
+//   $result = pager_query("SELECT nid FROM {node} WHERE type = 'page' ORDER BY nid ASC", $limit);
+
+//   while ($row = db_fetch_object($result)) {
+//     $node = node_load($row->nid);
+
+//     if ($node && $node->type === 'page' && isset($node->title)) {
+//       $title = strtolower(check_plain($node->title));
+//       $company_name = '';
+//       $social_links = [];
+
+//       // Get full body HTML
+//       $body_html = isset($node->body) ? check_markup($node->body, $node->format, FALSE) : '';
+
+//       // Extract social media links
+//       if (!empty($body_html)) {
+//         preg_match_all(
+//           '/https?:\/\/(?:www\.)?(facebook\.com|twitter\.com|linkedin\.com|instagram\.com|youtube\.com|tiktok\.com)\/[^\s"\'<>]+/i',
+//           $body_html,
+//           $matches
+//         );
+//         $social_links = array_unique($matches[0]);
+//       }
+
+//       // Convert to clickable links
+//       $social_links_html = '';
+//       if (!empty($social_links)) {
+//         $linked = array_map(function($url) {
+//           return l($url, $url, array('attributes' => array('target' => '_blank')));
+//         }, $social_links);
+//         $social_links_html = implode('<br />', $linked);
+//       }
+
+//       // Handle company name
+//       if (!empty($node->field_company_name_form)) {
+//         $field_items = $node->field_company_name_form;
+
+//         if (isset($field_items[0]['value'])) {
+//           $term = taxonomy_get_term($field_items[0]['value']);
+//           if (!empty($term) && isset($term->name)) {
+//             $company_name = strtolower(check_plain($term->name));
+//           } else {
+//             $company_name = strtolower(check_plain($field_items[0]['value']));
+//           }
+//         }
+//       }
+//       $rows[] = array(
+//         $node->nid,
+//         $title,
+//         $company_name,
+//         $social_links_html,
+//       );
+//     }
+//   }
+
+//   // Output table and pager
+//   $output = theme('table', $header, $rows);
+//   $output .= theme('pager', array(), $limit);
+
+//   return $output;
+// }
+
+
+// function load_all_nodes_page() {
+//   $header = array('Node ID', 'Title', 'Organization Name', ' Social Links');
+//   $rows = array();
+
+//   $limit = 50;
+//   $result = pager_query("SELECT nid FROM {node} WHERE type = 'page' ORDER BY nid ASC", $limit);
+
+//   while ($row = db_fetch_object($result)) {
+//     $node = node_load($row->nid);
+
+
+//     if ($node && $node->type === 'page' && isset($node->title)) {
+//       $title = check_plain($node->title);
+//       $company_name = '';
+//       $user_links = [];
+
+//       // Get full body HTML
+//       $body_html = isset($node->body) ? check_markup($node->body, $node->format, FALSE) : '';
+
+//       // Extract only social links with /user/
+//       if (!empty($body_html)) {
+//         preg_match_all(
+//         //   '/https?:\/\/(?:www\.)?(facebook\.com|twitter\.com|linkedin\.com|instagram\.com|youtube\.com)\/user\/[^\s"\'<>]+/i',
+//          '/https?:\/\/(?:www\.)?(facebook\.com|twitter\.com|linkedin\.com|instagram\.com|youtube\.com|pinterest\.com)\/[^\s"\'<>]+/i',
+        
+     
+//           $body_html,
+//           $matches
+//         );
+//         $user_links = array_unique($matches[0]);
+//       }
+
+//       // Skip if no /user/ social links
+//       if (empty($user_links)) {
+//         continue;
+//       }
+
+//       // Convert links to clickable HTML
+//       $user_links_html = implode('<br />', array_map(function($url) {
+//         return l($url, $url, array('attributes' => array('target' => '_blank')));
+//       }, $user_links));
+
+//       // Get company name from taxonomy term
+//       if (!empty($node->field_company_name_form)) {
+//         $field_items = $node->field_company_name_form;
+
+//         if (isset($field_items[0]['value'])) {
+//           $term = taxonomy_get_term($field_items[0]['value']);
+//           if (!empty($term) && isset($term->name)) {
+//             $company_name = check_plain($term->name);
+//           } else {
+//             $company_name = check_plain($field_items[0]['value']);
+//           }
+//         }
+//       }
+
+//       $rows[] = array(
+//         $node->nid,
+//         $title,
+//         $company_name,
+//         $user_links_html,
+//       );
+//     }
+//   }
+
+//   // Output table and pager
+//   $output = theme('table', $header, $rows);
+//   $output .= theme('pager', array(), $limit);
+//   return $output;
+// }
+
+
+// function load_all_nodes_page() {
+//   $header = array('Node ID', 'Title', 'Organization Name', 'Social Links');
+//   $rows = array();
+
+//   // Use db_query() instead of pager_query()
+//   $result = db_query("SELECT nid FROM {node} WHERE type = 'page' ORDER BY nid ASC");
+
+//   while ($row = db_fetch_object($result)) {
+//     $node = node_load($row->nid);
+
+//     if ($node && $node->type === 'page' && isset($node->title)) {
+//       $title = check_plain($node->title);
+
+//       $company_name = '';
+//       $user_links = [];
+
+//       // Get full body HTML
+//       $body_html = isset($node->body) ? check_markup($node->body, $node->format, FALSE) : '';
+
+//       // Extract only social links with /user/
+//       if (!empty($body_html)) {
+//         preg_match_all(
+//           '/https?:\/\/(?:www\.)?(facebook\.com|twitter\.com|linkedin\.com|instagram\.com|youtube\.com)\/user\/[^\s"\'<>]+/i',
+//         //    '/https?:\/\/(?:www\.)?(facebook\.com|twitter\.com|linkedin\.com|instagram\.com|youtube\.com)\/accounts\/[^\s"\'<>]+/i',
+//         // '/https?:\/\/(?:www\.)?(facebook\.com|twitter\.com|linkedin\.com|instagram\.com|youtube\.com)\/c\/[^\s"\'<>]+/i',
+//         // '/https?:\/\/(?:www\.)?(facebook\.com|twitter\.com|linkedin\.com|instagram\.com|youtube\.com)\/uas\/[^\s"\'<>]+/i',
+//         // '/https?:\/\/(?:www\.)?(facebook\.com|twitter\.com|linkedin\.com|instagram\.com|youtube\.com)\/login[^\s"\'<>]*/i',
+//         // '/https?:\/\/(?:www\.)?(facebook\.com|twitter\.com|linkedin\.com|instagram\.com|youtube\.com)\/authwall\/[^\s"\'<>]+/i',
+
+
+//           $body_html,
+//           $matches
+//         );
+//         $user_links = array_unique($matches[0]);
+//       }
+
+//       // Skip if no /user/ social links
+//       if (empty($user_links)) {
+//         continue;
+//       }
+
+//       // Convert links to clickable HTML
+//       $user_links_html = implode('<br />', array_map(function($url) {
+//         return l($url, $url, array('attributes' => array('target' => '_blank')));
+//       }, $user_links));
+
+//       // Get company name from taxonomy term
+//       if (!empty($node->field_company_name_form)) {
+//         $field_items = $node->field_company_name_form;
+
+//         if (isset($field_items[0]['value'])) {
+//           $term = taxonomy_get_term($field_items[0]['value']);
+//           if (!empty($term) && isset($term->name)) {
+//             $company_name = check_plain($term->name);
+//           } else {
+//             $company_name = check_plain($field_items[0]['value']);
+//           }
+//         }
+//       }
+
+//       $rows[] = array(
+//         $node->nid,
+//         $title,
+//         $company_name,
+//         $user_links_html,
+//       );
+//     }
+//   }
+
+
+//    // Output table or "No data found" message
+//   if (empty($rows)) {
+//     $output = '<p>No data found.</p>';
+//   } else {
+//     $output = theme('table', $header, $rows);
+//   }
+
+//   return $output;
+// }
+
+
+
+// function load_all_nodes_page() {
+//   $header = array('Node ID', 'Title', 'Organization Name', 'Unmatched Social Links');
+//   $rows = array();
+//   $limit = 50;
+
+//   $result = pager_query("SELECT nid FROM {node} WHERE type = 'page' ORDER BY nid ASC", $limit);
+
+//   while ($row = db_fetch_object($result)) {
+//     $node = node_load($row->nid);
+//     if (!$node || empty($node->title)) continue;
+
+//     // Get all title words
+//     $title_words = preg_split('/\s+/', strtolower(check_plain($node->title)), -1, PREG_SPLIT_NO_EMPTY);
+//     $company_name = '';
+//     $unmatched_links = array();
+
+//     // Get and render body field
+//     $body_html = isset($node->body) ? check_markup($node->body, $node->format, FALSE) : '';
+
+//     if (!empty($body_html)) {
+//       preg_match_all(
+//         '/https?:\/\/(?:www\.)?(facebook\.com|twitter\.com|linkedin\.com|instagram\.com|youtube\.com|pinterest\.com)\/([^\s"\'<>\/?#]+)[^\s"\'<>]*/i',
+//         $body_html,
+//         $matches
+//       );
+
+//       $social_links = isset($matches[0]) ? array_unique($matches[0]) : array();
+//       $link_users = isset($matches[2]) ? $matches[2] : array();
+
+//       foreach ($social_links as $index => $link) {
+//         $username = isset($link_users[$index]) ? strtolower(trim($link_users[$index])) : '';
+//         $matched = false;
+
+//         // If any title word exists in the username, mark as matched
+//         foreach ($title_words as $word) {
+//           if ($word !== '' && strpos($username, $word) !== false) {
+//             $matched = true;
+//             break;
+//           }
+//         }
+
+//         // Add only if NOT matched
+//         if (!$matched) {
+//           $unmatched_links[] = l(check_plain($link), $link, array('attributes' => array('target' => '_blank')));
+//         }
+//       }
+//     }
+
+//     // Get company name if available
+//     if (!empty($node->field_company_name_form) && isset($node->field_company_name_form[0]['value'])) {
+//       $val = $node->field_company_name_form[0]['value'];
+//       $term = taxonomy_get_term($val);
+//       $company_name = !empty($term->name) ? strtolower(check_plain($term->name)) : strtolower(check_plain($val));
+//     }
+
+//     // Only add rows that have unmatched links
+//     if (!empty($unmatched_links)) {
+//       $rows[] = array(
+//         $node->nid,
+//         check_plain($node->title),
+//         check_plain($company_name),
+//         implode('<br />', $unmatched_links),
+//       );
+//     }
+//   }
+
+//   $output = theme('table', $header, $rows);
+//   $output .= theme('pager', array(), $limit);
+//   return $output;
+// }
+
+
+// function load_all_nodes_page() {
+//   $header = array('Node ID', 'Title', 'Organization Name', 'Unmatched Social Links');
+//   $rows = array();
+//   $limit = 50;
+
+//   $result = pager_query("SELECT nid FROM {node} WHERE type = 'page' ORDER BY nid ASC", $limit);
+
+//   while ($row = db_fetch_object($result)) {
+//     $node = node_load($row->nid);
+//     if (!$node || empty($node->title)) continue;
+
+//     // Get first word of title
+//     $title = strtolower(check_plain($node->title));
+//     $title_words = preg_split('/\s+/', $title, -1, PREG_SPLIT_NO_EMPTY);
+//     $title_first_word = isset($title_words[0]) ? $title_words[0] : '';
+
+//     // Get first word of company name
+//     $company_name = '';
+//     $company_first_word = '';
+//     if (!empty($node->field_company_name_form) && isset($node->field_company_name_form[0]['value'])) {
+//       $val = $node->field_company_name_form[0]['value'];
+//       $term = taxonomy_get_term($val);
+//       $company_name_raw = !empty($term->name) ? $term->name : $val;
+//       $company_name = strtolower(check_plain($company_name_raw));
+//       $company_words = preg_split('/\s+/', $company_name, -1, PREG_SPLIT_NO_EMPTY);
+//       $company_first_word = isset($company_words[0]) ? $company_words[0] : '';
+//     }
+
+//     $body_html = isset($node->body) ? check_markup($node->body, $node->format, FALSE) : '';
+
+//     $unmatched_links = array();
+//     if (!empty($body_html)) {
+//       preg_match_all(
+//         '/https?:\/\/(?:www\.)?(facebook\.com|twitter\.com|linkedin\.com\.company|instagram\.com|youtube\.com\.user|pinterest\.com)\/([^\s"\'<>\/?#]+)[^\s"\'<>]*/i',
+//         $body_html,
+//         $matches
+//       );
+
+//       $social_links = isset($matches[0]) ? array_unique($matches[0]) : array();
+//       $link_users = isset($matches[2]) ? $matches[2] : array();
+
+//       foreach ($social_links as $index => $link) {
+//         $username = isset($link_users[$index]) ? strtolower(trim($link_users[$index])) : '';
+//         $matched = false;
+
+//         // Compare username with title and company first word
+//         foreach (array($title_first_word, $company_first_word) as $word) {
+//           if ($word !== '' && strpos($username, $word) !== false) {
+//             $matched = true;
+//             break;
+//           }
+//         }
+
+//         if (!$matched) {
+//           $unmatched_links[] = l(check_plain($link), $link, array('attributes' => array('target' => '_blank')));
+//         }
+//       }
+//     }
+
+//     // Only add rows that have unmatched links
+//     if (!empty($unmatched_links)) {
+//       $rows[] = array(
+//         $node->nid,
+//         check_plain($node->title),
+//         check_plain($company_name),
+//         implode('<br />', $unmatched_links),
+//       );
+//     }
+//   }
+
+//   $output = theme('table', $header, $rows);
+//   $output .= theme('pager', array(), $limit);
+//   return $output;
+// }
+
+
+
+
+function load_all_nodes_page() {
+  $header = array('Node ID', 'Title', 'Organization Name', 'Unmatched Social Links');
+  $rows = array();
+
+  // Corrected SQL and limited to 100 results
+  // $result = db_query("SELECT nid FROM {node} WHERE type = 'page' ORDER BY nid ASC ");
+   $result = db_query("SELECT nid FROM {node} ORDER BY nid ASC");
+
+  while ($row = db_fetch_object($result)) {
+    $node = node_load($row->nid);
+    if (!$node || empty($node->title)) continue;
+
+    // Get all words from the title
+    $title = strtolower(check_plain($node->title));
+    $title_words = preg_split('/\s+/', $title, -1, PREG_SPLIT_NO_EMPTY);
+
+    // Get all words from the company name
+    $company_name = '';
+    $company_words = array();
+    if (!empty($node->field_company_name_form) && isset($node->field_company_name_form[0]['value'])) {
+      $val = $node->field_company_name_form[0]['value'];
+      $term = taxonomy_get_term($val);
+      $company_name_raw = !empty($term->name) ? $term->name : $val;
+      $company_name = strtolower(check_plain($company_name_raw));
+      $company_words = preg_split('/\s+/', $company_name, -1, PREG_SPLIT_NO_EMPTY);
+    }
+
+    // Merge all words to check against social usernames
+    $all_words = array_merge($title_words, $company_words);
+
+    $body_html = isset($node->body) ? check_markup($node->body, $node->format, FALSE) : '';
+    $unmatched_links = array();
+
+    if (!empty($body_html)) {
+      preg_match_all(
+        '/https?:\/\/(?:www\.)?(facebook\.com|twitter\.com|linkedin\.com\.company|instagram\.com|youtube\.com\.user|pinterest\.com)\/([^\s"\'<>\/?#]+)[^\s"\'<>]*/i',
+        $body_html,
+        $matches
+      );
+
+      $social_links = isset($matches[0]) ? array_unique($matches[0]) : array();
+      $link_users = isset($matches[2]) ? $matches[2] : array();
+
+      foreach ($social_links as $index => $link) {
+        $username = isset($link_users[$index]) ? strtolower(trim($link_users[$index])) : '';
+        $matched = false;
+
+        // Check if any word matches a part of the username
+        foreach ($all_words as $word) {
+          if ($word !== '' && strpos($username, $word) !== false) {
+            $matched = true;
+            break;
+          }
+        }
+
+        // If no match, consider it unmatched
+        if (!$matched) {
+          $unmatched_links[] = l(check_plain($link), $link, array('attributes' => array('target' => '_blank')));
+        }
+      }
+    }
+
+    // Only add rows with unmatched social links
+    if (!empty($unmatched_links)) {
+      $rows[] = array(
+        $node->nid,
+        check_plain($node->title),
+        check_plain($company_name),
+        implode('<br />', $unmatched_links),
+      );
+    }
+  }
+
+  $output = theme('table', $header, $rows);
+  return $output;
+}
