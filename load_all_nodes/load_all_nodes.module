@@ -380,37 +380,42 @@ function load_all_website_page() {
 // }
 
 
+
+
+
+
+
 // function load_all_nodes_page() {
 //   $header = array('Node ID', 'Title', 'Organization Name', 'Unmatched Social Links');
 //   $rows = array();
-//   $limit = 50;
 
-//   $result = pager_query("SELECT nid FROM {node} WHERE type = 'page' ORDER BY nid ASC", $limit);
+//    $result = db_query("SELECT nid FROM {node} ORDER BY nid ASC");
 
 //   while ($row = db_fetch_object($result)) {
 //     $node = node_load($row->nid);
 //     if (!$node || empty($node->title)) continue;
 
-//     // Get first word of title
+//     // Get all words from the title
 //     $title = strtolower(check_plain($node->title));
 //     $title_words = preg_split('/\s+/', $title, -1, PREG_SPLIT_NO_EMPTY);
-//     $title_first_word = isset($title_words[0]) ? $title_words[0] : '';
 
-//     // Get first word of company name
+//     // Get all words from the company name
 //     $company_name = '';
-//     $company_first_word = '';
+//     $company_words = array();
 //     if (!empty($node->field_company_name_form) && isset($node->field_company_name_form[0]['value'])) {
 //       $val = $node->field_company_name_form[0]['value'];
 //       $term = taxonomy_get_term($val);
 //       $company_name_raw = !empty($term->name) ? $term->name : $val;
 //       $company_name = strtolower(check_plain($company_name_raw));
 //       $company_words = preg_split('/\s+/', $company_name, -1, PREG_SPLIT_NO_EMPTY);
-//       $company_first_word = isset($company_words[0]) ? $company_words[0] : '';
 //     }
 
-//     $body_html = isset($node->body) ? check_markup($node->body, $node->format, FALSE) : '';
+//     // Merge all words to check against social usernames
+//     $all_words = array_merge($title_words, $company_words);
 
+//     $body_html = isset($node->body) ? check_markup($node->body, $node->format, FALSE) : '';
 //     $unmatched_links = array();
+
 //     if (!empty($body_html)) {
 //       preg_match_all(
 //         '/https?:\/\/(?:www\.)?(facebook\.com|twitter\.com|linkedin\.com\.company|instagram\.com|youtube\.com\.user|pinterest\.com)\/([^\s"\'<>\/?#]+)[^\s"\'<>]*/i',
@@ -425,9 +430,177 @@ function load_all_website_page() {
 //         $username = isset($link_users[$index]) ? strtolower(trim($link_users[$index])) : '';
 //         $matched = false;
 
-//         // Compare username with title and company first word
-//         foreach (array($title_first_word, $company_first_word) as $word) {
+//         // Check if any word matches a part of the username
+//         foreach ($all_words as $word) {
 //           if ($word !== '' && strpos($username, $word) !== false) {
+//             $matched = true;
+//             break;
+//           }
+//         }
+
+//         // If no match, consider it unmatched
+//         if (!$matched) {
+//           $unmatched_links[] = l(check_plain($link), $link, array('attributes' => array('target' => '_blank')));
+//         }
+//       }
+//     }
+
+//     // Only add rows with unmatched social links
+//     if (!empty($unmatched_links)) {
+//       $rows[] = array(
+//         $node->nid,
+//         // check_plain($node->title),
+//         check_plain(strtolower($node->title)),
+//         check_plain($company_name),
+//         implode('<br />', $unmatched_links),
+//       );
+//     }
+//   }
+
+//   $output = theme('table', $header, $rows);
+//   return $output;
+// }
+
+
+// function load_all_nodes_page() {
+//   $header = array('Node ID', 'Title', 'Organization Name', 'Unmatched Social Links');
+//   $rows = array();
+
+//   // Get all node IDs
+//   $result = db_query("SELECT nid FROM {node} ORDER BY nid ASC");
+
+//   while ($row = db_fetch_object($result)) {
+//     $node = node_load($row->nid);
+//     if (!$node || empty($node->title)) {
+//       continue;
+//     }
+
+//     // Prepare title words
+//     $title = strtolower(check_plain($node->title));
+//     $title_words = preg_split('/\s+/', $title, -1, PREG_SPLIT_NO_EMPTY);
+
+//     // Prepare company name words
+//     $company_name = '';
+//     $company_words = array();
+
+//     if (!empty($node->field_company_name_form) && isset($node->field_company_name_form[0]['value'])) {
+//       $val = $node->field_company_name_form[0]['value'];
+//       $term = taxonomy_get_term($val);
+//       $company_name_raw = !empty($term->name) ? $term->name : $val;
+//       $company_name = strtolower(check_plain($company_name_raw));
+//       $company_words = preg_split('/\s+/', $company_name, -1, PREG_SPLIT_NO_EMPTY);
+//     }
+
+//     // Combine all comparison words
+//     $all_words = array_merge($title_words, $company_words);
+//     $all_words = array_unique(array_filter($all_words)); // Clean up
+
+//     // Prepare body content
+//     $body_html = '';
+//     if (!empty($node->body)) {
+//       $body_html = check_markup($node->body, $node->format, FALSE);
+//     }
+
+//     $unmatched_links = array();
+
+//     if (!empty($body_html)) {
+//       // Extract social links and usernames
+//       preg_match_all(
+//         '/https?:\/\/(?:www\.)?(facebook\.com|twitter\.com|linkedin\.com\.company|instagram\.com|youtube\.com\.user|pinterest\.com)\/([^\s"\'<>\/?#&]+)/i',
+//         $body_html,
+//         $matches
+//       );
+
+//       $social_links = isset($matches[0]) ? array_unique($matches[0]) : array();
+//       $link_users = isset($matches[2]) ? $matches[2] : array();
+
+//       foreach ($social_links as $index => $link) {
+//         $username = isset($link_users[$index]) ? strtolower(trim($link_users[$index])) : '';
+//         $matched = false;
+
+//         // Try to match any keyword from title or company name
+//         foreach ($all_words as $word) {
+//           if (strlen($word) >= 1 && strpos($username, $word) !== false) {
+//             $matched = true;
+//             break;
+//           }
+//         }
+
+//         if (!$matched) {
+//           // Unmatched link: show it
+//           $unmatched_links[] = l(check_plain($link), $link, array('attributes' => array('target' => '_blank')));
+//         }
+//       }
+//     }
+
+//     // Add a row only if there are unmatched links
+//     if (!empty($unmatched_links)) {
+//       $rows[] = array(
+//         $node->nid,
+//         check_plain($node->title),
+//         check_plain($company_name),
+//         implode('<br />', $unmatched_links),
+//       );
+//     }
+//   }
+
+//   // Build table output
+//   $output = theme('table', $header, $rows);
+//   return $output;
+// }
+
+
+// function load_all_nodes_page() {
+//   $header = array('Node ID', 'Title', 'Organization Name', 'Unmatched Social Links');
+//   $rows = array();
+
+//   $result = db_query("SELECT nid FROM {node} ORDER BY nid ASC");
+
+//   while ($row = db_fetch_object($result)) {
+//     $node = node_load($row->nid);
+//     if (!$node || empty($node->title)) {
+//       continue;
+//     }
+
+//     // Extract and clean title words
+//     $title = strtolower(check_plain($node->title));
+//     $title_words = preg_split('/\s+/', preg_replace('/[^a-z0-9 ]/', ' ', $title), -1, PREG_SPLIT_NO_EMPTY);
+
+//     // Extract and clean company name words
+//     $company_name = '';
+//     $company_words = array();
+//     if (!empty($node->field_company_name_form[0]['value'])) {
+//       $val = $node->field_company_name_form[0]['value'];
+//       $term = taxonomy_get_term($val);
+//       $company_name_raw = !empty($term->name) ? $term->name : $val;
+//       $company_name = strtolower(check_plain($company_name_raw));
+//       $company_words = preg_split('/\s+/', preg_replace('/[^a-z0-9 ]/', ' ', $company_name), -1, PREG_SPLIT_NO_EMPTY);
+//     }
+
+//     // Merge and clean word list
+//     $all_words = array_unique(array_merge($title_words, $company_words));
+//     $all_words = array_filter($all_words, function($w) { return strlen($w) > 2; });
+
+//     // Extract social links from body
+//     $unmatched_links = array();
+//     if (!empty($node->body)) {
+//       $body_html = check_markup($node->body, $node->format, FALSE);
+
+//       preg_match_all(
+//         '/https?:\/\/(?:www\.)?(facebook\.com|twitter\.com|linkedin\.com\.company|instagram\.com|youtube\.com\.user|pinterest\.com)\/([^\s"\'<>\/?#&]+)/i',
+//         $body_html,
+//         $matches
+//       );
+
+//       $social_links = isset($matches[0]) ? array_unique($matches[0]) : array();
+//       $link_users = isset($matches[2]) ? $matches[2] : array();
+
+//       foreach ($social_links as $index => $link) {
+//         $username = isset($link_users[$index]) ? strtolower(trim($link_users[$index])) : '';
+//         $matched = false;
+
+//         foreach ($all_words as $word) {
+//           if (strpos($username, $word) !== false) {
 //             $matched = true;
 //             break;
 //           }
@@ -439,10 +612,124 @@ function load_all_website_page() {
 //       }
 //     }
 
-//     // Only add rows that have unmatched links
+//  // Add row with linked node ID
+// if (!empty($unmatched_links)) {
+//   $rows[] = array(
+//     l('View Node', 'https://www.indiacustomercare.com/node/' . $node->nid, array('external' => TRUE, 'attributes' => array('target' => '_blank'))),
+//     check_plain($node->title),
+//      check_plain($company_name),
+//     implode('<br />', $unmatched_links),
+//   );
+// }
+
+//   }
+
+//   return theme('table', $header, $rows);
+// }
+
+// ------------05/06/2025
+// function load_all_nodes_page() {
+//   $header = array('Node ID', 'Title', 'Organization Name', 'Unmatched Social Links');
+//   $rows = array();
+
+//   $result = db_query("SELECT nid FROM {node} ORDER BY nid ASC");
+
+//   while ($row = db_fetch_object($result)) {
+//     $node = node_load($row->nid);
+//     if (!$node || empty($node->title)) {
+//       continue;
+//     }
+
+//     // Clean and split title
+//     $title = strtolower(check_plain($node->title));
+//     $title_words = preg_split('/\s+/', preg_replace('/[^a-z0-9 ]/', ' ', $title), -1, PREG_SPLIT_NO_EMPTY);
+// // echo "<pre>";
+// //     print_r($title_words);
+// // echo "</pre>";
+//     // Extract company name
+//     $company_name = '';
+//     if (!empty($node->field_company_name_form[0]['value'])) {
+//       $tid = $node->field_company_name_form[0]['value'];
+//       $term = taxonomy_get_term($tid);
+//       $company_name_raw = !empty($term->name) ? $term->name : $tid;
+//       $company_name = strtolower(check_plain($company_name_raw));
+//     }
+
+//     // Prepare word list (min 3 chars)
+//     $all_words = array_filter($title_words, function($w) {
+//       return strlen($w) > 2;
+//     });
+//     $all_words = array_values($all_words); // Reindex
+// //     echo "<pre>";
+// //     print_r($all_words);
+// // echo "</pre>";
+
+//     // Extract social links
+//     $unmatched_links = array();
+//     if (!empty($node->body)) {
+//       $body_html = check_markup($node->body, $node->format, FALSE);
+
+//       preg_match_all(
+//         '/https?:\/\/(?:www\.)?(facebook\.com|twitter\.com|linkedin\.com\.company|instagram\.com\.accounts|youtube\.com\.channel|pinterest\.com)\/([^\s"\'<>\/]+)/i',
+//         $body_html,
+//         $matches
+//       );
+
+//       $social_links = isset($matches[0]) ? array_unique($matches[0]) : array();
+//       $usernames = isset($matches[2]) ? $matches[2] : array();
+
+//       foreach ($social_links as $index => $link) {
+//         $username = isset($usernames[$index]) ? strtolower(trim($usernames[$index])) : '';
+//         $matched = false;
+
+//         // Single word match
+//         foreach ($all_words as $word) {
+//           if (strpos($username, $word) !== false) {
+//             $matched = true;
+//             break;
+//           }
+//         }
+
+//         // Combined word variants
+//         if (!$matched) {
+//           $count = count($all_words);
+//           for ($i = 0; $i < $count; $i++) {
+//             for ($j = 0; $j < $count; $j++) {
+//               if ($i == $j) continue;
+
+//               $w1 = $all_words[$i];
+//               $w2 = $all_words[$j];
+
+//               $variants = array(
+//                 $w1 . $w2,
+//                 $w1 . '_' . $w2,
+//                 $w1 . '.' . $w2,
+//                 $w2 . $w1,
+//                 $w2 . '_' . $w1,
+//                 $w2 . '.' . $w1,
+//               );
+
+//               foreach ($variants as $combo) {
+//                 if (strpos($username, $combo) !== false) {
+//                   $matched = true;
+//                   break 3;
+//                 }
+//               }
+//             }
+//           }
+//         }
+
+//         // If not matched, add to unmatched list
+//         if (!$matched) {
+//           $unmatched_links[] = l(check_plain($link), $link, array('attributes' => array('target' => '_blank')));
+//         }
+//       }
+//     }
+
+//     // Add row if unmatched links exist
 //     if (!empty($unmatched_links)) {
 //       $rows[] = array(
-//         $node->nid,
+//         l('View Node', 'https://www.indiacustomercare.com/node/' . $node->nid, array('attributes' => array('target' => '_blank'))),
 //         check_plain($node->title),
 //         check_plain($company_name),
 //         implode('<br />', $unmatched_links),
@@ -450,10 +737,125 @@ function load_all_website_page() {
 //     }
 //   }
 
-//   $output = theme('table', $header, $rows);
-//   $output .= theme('pager', array(), $limit);
-//   return $output;
+//   // No unmatched rows case
+//   if (empty($rows)) {
+//     return t('No unmatched social links found.');
+//   }
+
+//   // Output table
+//   return theme('table', $header, $rows);
 // }
+
+
+// function load_all_nodes_page() {
+//   $header = array('Node ID', 'Title', 'Organization Name', 'Unmatched Social Links');
+//   $rows = array();
+
+//   $result = db_query("SELECT nid FROM {node} ORDER BY nid ASC");
+
+//   while ($row = db_fetch_object($result)) {
+//     $node = node_load($row->nid);
+//     if (!$node || empty($node->title)) {
+//       continue;
+//     }
+
+//     // Clean and split title
+//     $title = strtolower(check_plain($node->title));
+//     $title_words = preg_split('/\s+/', preg_replace('/[^a-z0-9 ]/', ' ', $title), -1, PREG_SPLIT_NO_EMPTY);
+
+//     // Extract company name
+//     $company_name = '';
+//     if (!empty($node->field_company_name_form[0]['value'])) {
+//       $tid = $node->field_company_name_form[0]['value'];
+//       $term = taxonomy_get_term($tid);
+//       $company_name_raw = !empty($term->name) ? $term->name : $tid;
+//       $company_name = strtolower(check_plain($company_name_raw));
+//     }
+
+//     // Prepare word list (min 3 chars)
+//     $all_words = array_filter($title_words, function($w) {
+//       return strlen($w) > 2;
+//     });
+//     $all_words = array_values($all_words); // Reindex
+
+//     // Extract social links
+//     $unmatched_links = array();
+//     if (!empty($node->body)) {
+//       $body_html = check_markup($node->body, $node->format, FALSE);
+
+//       preg_match_all(
+//         '/https?:\/\/(?:www\.)?(facebook\.com|twitter\.com|linkedin\.com\.company|instagram\.com\.accounts|youtube\.com\.channel|pinterest\.com)\/([^\s"\'<>\/]+)/i',
+        
+
+//         $body_html,
+//         $matches
+//       );
+
+//       $social_links = isset($matches[0]) ? array_unique($matches[0]) : array();
+//       $usernames = isset($matches[2]) ? $matches[2] : array();
+
+//       foreach ($social_links as $index => $link) {
+//         $username = isset($usernames[$index]) ? strtolower(trim($usernames[$index])) : '';
+//         $username_cleaned = preg_replace('/[^a-z0-9]/', '', $username); // Remove underscores, dots, etc.
+//         $matched = false;
+
+//         // Cleaned individual word match
+//         foreach ($all_words as $word) {
+//           if (strpos($username_cleaned, $word) !== false) {
+//             $matched = true;
+//             break;
+//           }
+//         }
+
+//         // Cleaned combination word variants
+//         if (!$matched) {
+//           $count = count($all_words);
+//           for ($i = 0; $i < $count; $i++) {
+//             for ($j = 0; $j < $count; $j++) {
+//               if ($i == $j) continue;
+
+//               $w1 = $all_words[$i];
+//               $w2 = $all_words[$j];
+
+//               $variants = array(
+//                 $w1 . $w2,
+//                 $w2 . $w1,
+//               );
+
+//               foreach ($variants as $combo) {
+//                 $combo_cleaned = preg_replace('/[^a-z0-9]/', '', $combo);
+//                 if (strpos($username_cleaned, $combo_cleaned) !== false) {
+//                   $matched = true;
+//                   break 3;
+//                 }
+//               }
+//             }
+//           }
+//         }
+
+//         if (!$matched) {
+//           $unmatched_links[] = l(check_plain($link), $link, array('attributes' => array('target' => '_blank')));
+//         }
+//       }
+//     }
+
+//     if (!empty($unmatched_links)) {
+//       $rows[] = array(
+//         l('View Node', 'https://www.indiacustomercare.com/node/' . $node->nid, array('attributes' => array('target' => '_blank'))),
+//         check_plain($node->title),
+//         check_plain($company_name),
+//         implode('<br />', $unmatched_links),
+//       );
+//     }
+//   }
+
+//   if (empty($rows)) {
+//     return t('No unmatched social links found.');
+//   }
+
+//   return theme('table', $header, $rows);
+// }
+//  ----------------06/06/2025-----------
 
 
 
@@ -462,75 +864,176 @@ function load_all_nodes_page() {
   $header = array('Node ID', 'Title', 'Organization Name', 'Unmatched Social Links');
   $rows = array();
 
-  // Corrected SQL and limited to 100 results
-  // $result = db_query("SELECT nid FROM {node} WHERE type = 'page' ORDER BY nid ASC ");
-   $result = db_query("SELECT nid FROM {node} ORDER BY nid ASC");
+  $result = db_query("SELECT nid FROM {node} ORDER BY nid ASC ");
 
   while ($row = db_fetch_object($result)) {
     $node = node_load($row->nid);
-    if (!$node || empty($node->title)) continue;
-
-    // Get all words from the title
-    $title = strtolower(check_plain($node->title));
-    $title_words = preg_split('/\s+/', $title, -1, PREG_SPLIT_NO_EMPTY);
-
-    // Get all words from the company name
-    $company_name = '';
-    $company_words = array();
-    if (!empty($node->field_company_name_form) && isset($node->field_company_name_form[0]['value'])) {
-      $val = $node->field_company_name_form[0]['value'];
-      $term = taxonomy_get_term($val);
-      $company_name_raw = !empty($term->name) ? $term->name : $val;
-      $company_name = strtolower(check_plain($company_name_raw));
-      $company_words = preg_split('/\s+/', $company_name, -1, PREG_SPLIT_NO_EMPTY);
+    if (!$node || empty($node->title)) {
+      continue;
     }
 
-    // Merge all words to check against social usernames
-    $all_words = array_merge($title_words, $company_words);
+    // Convert title to lowercase and split into clean words
+    $title_clean = strtolower(check_plain($node->title));
+    $title_words = preg_split('/\s+/', preg_replace('/[^a-z0-9 ]/', ' ', $title_clean), -1, PREG_SPLIT_NO_EMPTY);
+    $title_words = array_filter($title_words, function($w) {
+      return strlen($w) > 1; // Filter out short/common words
+    });
+    $title_words = array_unique($title_words);
 
-    $body_html = isset($node->body) ? check_markup($node->body, $node->format, FALSE) : '';
+    // Get company name
+    $company_name = '';
+    if (!empty($node->field_company_name_form[0]['value'])) {
+      $tid = $node->field_company_name_form[0]['value'];
+      $term = taxonomy_get_term($tid);
+      $company_name_raw = !empty($term->name) ? $term->name : $tid;
+      $company_name = strtolower(check_plain($company_name_raw));
+    }
+
     $unmatched_links = array();
+    $has_match = false;
 
-    if (!empty($body_html)) {
+    if (!empty($node->body)) {
+      $body_html =strtolower( check_markup($node->body, $node->format, FALSE));
+
+      // Extract only social links
       preg_match_all(
-        '/https?:\/\/(?:www\.)?(facebook\.com|twitter\.com|linkedin\.com\.company|instagram\.com|youtube\.com\.user|pinterest\.com)\/([^\s"\'<>\/?#]+)[^\s"\'<>]*/i',
+        '/https?:\/\/(?:www\.)?(facebook\.com|twitter\.com|linkedin\.com\.company|instagram\.com|youtube\.com\.channel|pinterest\.com)\/[^\s"\'<>]+/i',
         $body_html,
         $matches
       );
 
       $social_links = isset($matches[0]) ? array_unique($matches[0]) : array();
-      $link_users = isset($matches[2]) ? $matches[2] : array();
 
-      foreach ($social_links as $index => $link) {
-        $username = isset($link_users[$index]) ? strtolower(trim($link_users[$index])) : '';
+      foreach ($social_links as $link) {
+        $link_clean = strtolower(preg_replace('/[^a-z0-9]/', '', $link));
         $matched = false;
 
-        // Check if any word matches a part of the username
-        foreach ($all_words as $word) {
-          if ($word !== '' && strpos($username, $word) !== false) {
+        // Check against each word from title
+        foreach ($title_words as $word) {
+          if (strpos($link_clean, $word) !== false) {
             $matched = true;
             break;
           }
         }
 
-        // If no match, consider it unmatched
-        if (!$matched) {
-          $unmatched_links[] = l(check_plain($link), $link, array('attributes' => array('target' => '_blank')));
+        if ($matched) {
+          $has_match = true;
+          break; // At least one match found; skip this node
         }
       }
-    }
 
-    // Only add rows with unmatched social links
-    if (!empty($unmatched_links)) {
-      $rows[] = array(
-        $node->nid,
-        check_plain($node->title),
-        check_plain($company_name),
-        implode('<br />', $unmatched_links),
-      );
+      // Only add if no match found and links exist
+      if (!$has_match && !empty($social_links)) {
+        foreach ($social_links as $link) {
+          $unmatched_links[] = '<a href="' . check_url($link) . '" target="_blank">' . check_plain($link) . '</a>';
+        }
+
+        $rows[] = array(
+          l('View Node', 'https://www.indiacustomercare.com/node/' . $node->nid, array('attributes' => array('target' => '_blank'))),
+          strtolower(check_plain($node->title)),
+          check_plain($company_name),
+          implode('<br />', $unmatched_links),
+        );
+      }
     }
   }
 
-  $output = theme('table', $header, $rows);
-  return $output;
+  if (empty($rows)) {
+    return t('No unmatched social links found.');
+  }
+
+  return theme('table', $header, $rows);
 }
+
+
+
+
+
+
+
+
+
+
+
+// function load_all_nodes_page() {
+//   $header = array('Node ID', 'Title', 'Organization Name', 'Unmatched Social Links');
+//   $rows = array();
+
+//   $result = db_query("SELECT nid FROM {node} ORDER BY nid ASC");
+
+//   while ($row = db_fetch_object($result)) {
+//     $node = node_load($row->nid);
+//     if (!$node || empty($node->title)) {
+//       continue;
+//     }
+
+//     // Clean title into lowercase words
+//     $title_clean = strtolower(check_plain($node->title));
+//     $title_words = preg_split('/\s+/', preg_replace('/[^a-z0-9 ]/', ' ', $title_clean), -1, PREG_SPLIT_NO_EMPTY);
+//     $title_words = array_filter($title_words, function($w) {
+//       return strlen($w) > 1; // Filter out 1-letter noise
+//     });
+//     $title_words = array_unique($title_words);
+
+//     // Get company name (optional)
+//     $company_name = '';
+//     if (!empty($node->field_company_name_form[0]['value'])) {
+//       $tid = $node->field_company_name_form[0]['value'];
+//       $term = taxonomy_get_term($tid);
+//       $company_name_raw = !empty($term->name) ? $term->name : $tid;
+//       $company_name = strtolower(check_plain($company_name_raw));
+//     }
+
+//     $unmatched_links = array();
+
+//     if (!empty($node->body)) {
+//       $body_html = strtolower(check_markup($node->body, $node->format, FALSE));
+
+//       // Extract all social links
+//       preg_match_all(
+//         '/https?:\/\/(?:www\.)?(facebook\.com|twitter\.com|linkedin\.com\.company|instagram\.com|youtube\.com\.channel|pinterest\.com)\/[^\s"\'<>]+/i',
+//         $body_html,
+//         $matches
+//       );
+//       $social_links = isset($matches[0]) ? array_unique($matches[0]) : array();
+
+//       foreach ($social_links as $link) {
+//         $link_lower = strtolower($link);
+//         $exclude = false;
+
+//         // Check if any title word exists inside the link
+//         foreach ($title_words as $word) {
+//           if (strpos($link_lower, $word) !== false) {
+//             $exclude = true;
+//             break;
+//           }
+//         }
+
+//         if (!$exclude) {
+//           $unmatched_links[] = '<a href="' . check_url($link) . '" target="_blank">' . check_plain($link) . '</a>';
+//         }
+//       }
+
+//       // If there are unmatched links, show row
+//       if (!empty($unmatched_links)) {
+//         $rows[] = array(
+//           l('View Node', 'https://www.indiacustomercare.com/node/' . $node->nid, array('attributes' => array('target' => '_blank'))),
+//           strtolower(check_plain($node->title)),
+//           check_plain($company_name),
+//           implode('<br />', $unmatched_links),
+//         );
+//       }
+//     }
+//   }
+
+//   if (empty($rows)) {
+//     return t('No unmatched social links found.');
+//   }
+
+//   return theme('table', $header, $rows);
+// }
+
+
+
+
+
